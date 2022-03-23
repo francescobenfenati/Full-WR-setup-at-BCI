@@ -1,0 +1,101 @@
+#!/bin/bash -x
+
+
+
+ip=10.0.2
+startpoint=214
+serverip=0x0a64000f #Data Queue 2
+servermac="0x000f 0x5320 0x685c"  #
+
+#cmdclb=./clb/bin/clb
+cmdclb=./cmdr
+
+# UDP payload size
+#stmach_pktsize=0x578 # 1400
+#stmach_pktsize=0xAF0 # 2800
+#stmach_pktsize=0x5DC # 1500
+#stmach_pktsize=0x672 # 1650
+#stmach_pktsize=0x6D6 # 1750
+#stmach_pktsize=0x79E # 1950
+#stmach_pktsize=0x7D0 # 2000
+#stmach_pktsize=0x7D2 # 2002
+#stmach_pktsize=0x7EE # 2030
+#stmach_pktsize=0x802 # 2050
+stmach_pktsize=0x230c # 8972
+
+# HRV threshold
+hr_veto_thres=0xFA0 #4000 hits/TimeSlice
+
+clbarray=($@)
+
+for base in "${clbarray[@]}"
+do
+
+address=${ip}.${base}
+
+echo "Running $address"
+
+# Configure Octopus large and small as 'fake'.
+${cmdclb} ${address} var.set opt.debug_opt 0x3
+
+#if [ ${address} = "10.0.1.203" ]; then 
+#    echo "disabling all I2C devices for address "${address}    
+#    ${cmdclb} ${address} var.set ins.disable 0x7       
+#fi 
+
+
+# Disable compass sensor
+${cmdclb} ${address} var.set ins.disable_ins 0x5
+
+
+# Enabling AES                                                                                                       
+${cmdclb} ${address} var.set acs.acou_chan 1
+${cmdclb} ${address} var.set acs.acou_res 2
+
+# Set the packet size
+${cmdclb} ${address} var.set sys.stmach_pktsize ${stmach_pktsize}
+
+# Set the hr veto
+${cmdclb} ${address} var.set opt.hr_veto_thres ${hr_veto_thres}
+
+echo 'before init'
+
+# Emit init event
+ping ${address} -c 2
+# exit
+${cmdclb} ${address} event init
+
+ping ${address} -c 2
+
+${cmdclb} ${address} status
+
+ping ${address} -c 2
+
+# Set target server ip and mac
+${cmdclb} ${address} var.set net.ipmux_srv_ip ${serverip}
+${cmdclb} ${address} var.set net.ipmux_srv_mac ${servermac}
+
+sleep 1
+
+# Enable all optical channels
+#${cmdclb} ${address} opt.set +*
+echo 'before configure'
+${cmdclb} ${address} status
+
+
+# Go to configure
+${cmdclb} ${address} event configure
+${cmdclb} ${address} status
+
+sleep 4
+echo 'before start'
+
+${cmdclb} ${address} event start
+
+sleep 1
+
+# Check the status
+${cmdclb} ${address} status
+
+done
+
